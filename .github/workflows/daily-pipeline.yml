@@ -1,0 +1,65 @@
+name: Daily Pipeline
+
+on:
+  schedule:
+    - cron: '0 5 * * *' # 5 AM UTC daily
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Skip idempotency check (run even if already ran today)'
+        type: boolean
+        default: true
+      retry:
+        description: 'Enable retry loop for min 3 GO prospects (auto-enabled for scheduled runs)'
+        type: boolean
+        default: false
+      org_id:
+        description: 'Run for a specific org ID only (leave empty for all active orgs)'
+        type: string
+        default: ''
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout private repo
+        uses: actions/checkout@v5
+        with:
+          repository: gjarrosson/investormagic
+          token: ${{ secrets.PRIVATE_REPO_PAT }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run pipeline
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          EDGAR_PROXY_URL: ${{ secrets.EDGAR_PROXY_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          ORG_SECRETS_ENC_KEY: ${{ secrets.ORG_SECRETS_ENC_KEY }}
+          QUIET_MODE: 'true'
+          NODE_OPTIONS: '--dns-result-order=ipv4first'
+        run: |
+          FLAGS="--force"
+          # Scheduled runs always use retry; manual runs only if retry=true
+          if [[ "${{ github.event_name }}" == "schedule" ]] || [[ "${{ inputs.retry }}" == "true" ]]; then
+            echo "Retry loop enabled"
+          else
+            FLAGS="$FLAGS --no-retry"
+            echo "Single run mode (no retry)"
+          fi
+          # Optional: run for a specific org
+          if [[ -n "${{ inputs.org_id }}" ]]; then
+            FLAGS="$FLAGS --org ${{ inputs.org_id }}"
+            echo "Running for org: ${{ inputs.org_id }}"
+          fi
+          npx tsx -r tsconfig-paths/register scripts/run-pipeline.ts $FLAGS

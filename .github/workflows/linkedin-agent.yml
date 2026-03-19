@@ -1,0 +1,61 @@
+name: LinkedIn Agent
+
+on:
+  schedule:
+    # 4x/day on weekdays — San Francisco business hours (UTC-8 PST / UTC-7 PDT)
+    - cron: '0 16 * * 1-5'  # ~8-9 AM SF
+    - cron: '0 18 * * 1-5'  # ~10-11 AM SF
+    - cron: '0 21 * * 1-5'  # ~1-2 PM SF
+    - cron: '0 0 * * 2-6'   # ~4-5 PM SF (next day UTC)
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Skip business hours, daily limits, and pause checks'
+        type: boolean
+        default: true
+      org_id:
+        description: 'Run for a specific org ID only (leave empty for all orgs with config)'
+        type: string
+        default: ''
+
+concurrency:
+  group: linkedin-agent
+  cancel-in-progress: false
+
+jobs:
+  run-agent:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout private repo
+        uses: actions/checkout@v5
+        with:
+          repository: gjarrosson/investormagic
+          token: ${{ secrets.PRIVATE_REPO_PAT }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run LinkedIn orchestrator
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          ORG_SECRETS_ENC_KEY: ${{ secrets.ORG_SECRETS_ENC_KEY }}
+          QUIET_MODE: 'true'
+          NODE_OPTIONS: '--dns-result-order=ipv4first'
+        run: |
+          FLAGS="--no-jitter"
+          if [[ "${{ inputs.force }}" == "true" ]]; then
+            FLAGS="$FLAGS --force"
+          fi
+          if [[ -n "${{ inputs.org_id }}" ]]; then
+            FLAGS="$FLAGS --org ${{ inputs.org_id }}"
+          fi
+          npx tsx scripts/linkedin-orchestrator.ts $FLAGS

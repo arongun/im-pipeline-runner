@@ -1,0 +1,56 @@
+name: Re-Research
+
+on:
+  repository_dispatch:
+    types: [reresearch]
+  workflow_dispatch:
+    inputs:
+      prospect_ids:
+        description: 'Comma-separated prospect IDs (leave empty to read from DB)'
+        type: string
+        default: ''
+
+jobs:
+  reresearch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout private repo
+        uses: actions/checkout@v5
+        with:
+          repository: gjarrosson/investormagic
+          token: ${{ secrets.PRIVATE_REPO_PAT }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run re-research
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          EDGAR_PROXY_URL: ${{ secrets.EDGAR_PROXY_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+          ORG_SECRETS_ENC_KEY: ${{ secrets.ORG_SECRETS_ENC_KEY }}
+          QUIET_MODE: 'true'
+          NODE_OPTIONS: '--dns-result-order=ipv4first'
+        run: |
+          # Get IDs from repository_dispatch payload or workflow_dispatch input
+          IDS=""
+          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
+            IDS="${{ github.event.client_payload.prospect_ids }}"
+          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.prospect_ids }}" ]; then
+            IDS="${{ inputs.prospect_ids }}"
+          fi
+
+          if [ -n "$IDS" ]; then
+            npx tsx -r tsconfig-paths/register scripts/run-reresearch.ts --ids "$IDS"
+          else
+            npx tsx -r tsconfig-paths/register scripts/run-reresearch.ts
+          fi
