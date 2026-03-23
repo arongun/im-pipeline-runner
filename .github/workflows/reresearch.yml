@@ -37,18 +37,18 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           EDGAR_PROXY_URL: ${{ secrets.EDGAR_PROXY_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          ORG_SECRETS_ENC_KEY: ${{ secrets.ORG_SECRETS_ENC_KEY }}
           QUIET_MODE: 'true'
           NODE_OPTIONS: '--dns-result-order=ipv4first'
+          INPUT_EVENT_NAME: ${{ github.event_name }}
+          INPUT_PROSPECT_IDS: ${{ github.event.client_payload.prospect_ids }}
+          INPUT_DISPATCH_IDS: ${{ inputs.prospect_ids }}
         run: |
-          # Get IDs from repository_dispatch payload or workflow_dispatch input
           IDS=""
-          if [ "${{ github.event_name }}" = "repository_dispatch" ]; then
-            IDS="${{ github.event.client_payload.prospect_ids }}"
-          elif [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ inputs.prospect_ids }}" ]; then
-            IDS="${{ inputs.prospect_ids }}"
+          if [ "$INPUT_EVENT_NAME" = "repository_dispatch" ]; then
+            IDS="$INPUT_PROSPECT_IDS"
+          elif [ "$INPUT_EVENT_NAME" = "workflow_dispatch" ] && [ -n "$INPUT_DISPATCH_IDS" ]; then
+            IDS="$INPUT_DISPATCH_IDS"
           fi
-
           if [ -n "$IDS" ]; then
             npx tsx -r tsconfig-paths/register scripts/run-reresearch.ts --ids "$IDS"
           else
