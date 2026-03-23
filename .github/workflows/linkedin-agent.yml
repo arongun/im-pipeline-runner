@@ -47,15 +47,16 @@ jobs:
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-          ORG_SECRETS_ENC_KEY: ${{ secrets.ORG_SECRETS_ENC_KEY }}
           QUIET_MODE: 'true'
           NODE_OPTIONS: '--dns-result-order=ipv4first'
+          INPUT_FORCE: ${{ inputs.force }}
+          INPUT_ORG_ID: ${{ inputs.org_id }}
         run: |
-          FLAGS="--no-jitter"
-          if [[ "${{ inputs.force }}" == "true" ]]; then
-            FLAGS="$FLAGS --force"
+          args=(--no-jitter)
+          if [[ "$INPUT_FORCE" == "true" ]]; then
+            args+=(--force)
           fi
-          if [[ -n "${{ inputs.org_id }}" ]]; then
-            FLAGS="$FLAGS --org ${{ inputs.org_id }}"
+          if [[ -n "$INPUT_ORG_ID" ]]; then
+            args+=(--org "$INPUT_ORG_ID")
           fi
-          npx tsx scripts/linkedin-orchestrator.ts $FLAGS
+          npx tsx scripts/linkedin-orchestrator.ts "${args[@]}"
