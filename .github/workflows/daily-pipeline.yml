@@ -45,21 +45,20 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           EDGAR_PROXY_URL: ${{ secrets.EDGAR_PROXY_URL }}
           CRON_SECRET: ${{ secrets.CRON_SECRET }}
-          ORG_SECRETS_ENC_KEY: ${{ secrets.ORG_SECRETS_ENC_KEY }}
           QUIET_MODE: 'true'
           NODE_OPTIONS: '--dns-result-order=ipv4first'
+          INPUT_EVENT_NAME: ${{ github.event_name }}
+          INPUT_RETRY: ${{ inputs.retry }}
+          INPUT_ORG_ID: ${{ inputs.org_id }}
         run: |
-          FLAGS="--force"
-          # Scheduled runs always use retry; manual runs only if retry=true
-          if [[ "${{ github.event_name }}" == "schedule" ]] || [[ "${{ inputs.retry }}" == "true" ]]; then
+          args=(--force)
+          if [[ "$INPUT_EVENT_NAME" == "schedule" ]] || [[ "$INPUT_RETRY" == "true" ]]; then
             echo "Retry loop enabled"
           else
-            FLAGS="$FLAGS --no-retry"
+            args+=(--no-retry)
             echo "Single run mode (no retry)"
           fi
-          # Optional: run for a specific org
-          if [[ -n "${{ inputs.org_id }}" ]]; then
-            FLAGS="$FLAGS --org ${{ inputs.org_id }}"
-            echo "Running for org: ${{ inputs.org_id }}"
+          if [[ -n "$INPUT_ORG_ID" ]]; then
+            args+=(--org "$INPUT_ORG_ID")
           fi
-          npx tsx -r tsconfig-paths/register scripts/run-pipeline.ts $FLAGS
+          npx tsx -r tsconfig-paths/register scripts/run-pipeline.ts "${args[@]}"
