@@ -1,3 +1,4 @@
+# Keep-alive: 2026-05-16 (touch to reset GitHub's 60-day scheduled-workflow inactivity timer)
 name: Daily Pipeline
 
 on:
